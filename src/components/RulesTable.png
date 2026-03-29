@@ -1,0 +1,321 @@
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { Table, Group, Text, Badge, ActionIcon, Menu, Loader, Tooltip, Code, Stack, Modal, Button, Image, Checkbox, CopyButton } from '@mantine/core';
+import { IconEdit, IconTrash, IconDotsVertical, IconHistory, IconCheck, IconX, IconAlertTriangle, IconFileSearch, IconHandClick, IconCopy } from '@tabler/icons-react';
+import { API_BASE_URL } from '../config';
+
+import iconLogs from '../assets/iconNitur/logs.webp';
+import iconMessages from '../assets/iconNitur/messages.png';
+import iconStorage from '../assets/iconNitur/storage.png';
+import iconCustom from '../assets/iconNitur/custom.png';
+
+export const getNiturIconSrc = (tech) => {
+  if (tech === 'elastic_log') return iconLogs;
+  if (tech === 'CUSTOM') return iconCustom;
+  if (['rabbit', 'nifi', 'kafka'].includes(tech)) return iconMessages;
+  return iconStorage;
+};
+
+export default function RulesTable({ rules, onDelete, onBulkDelete, onEdit, onViewHistory, onNavigate, userRole }) {
+  const [ruleStatuses, setRuleStatuses] = useState({}); 
+  const [queryModalOpen, setQueryModalOpen] = useState(false);
+  const [selectedRuleData, setSelectedRuleData] = useState({ query: '', failingParts: [] });
+  
+  const [selectedRecords, setSelectedRecords] = useState([]);
+
+  const checkPromQLRule = async (query) => {
+    try {
+      const res = await axios.post(`${API_BASE_URL}/check_promql`, { query });
+      return res.data;
+    } catch (e) {
+      return { status: 'error', failing_parts: [query] };
+    }
+  };
+
+  const checkElasticRule = async (index, query) => {
+    try {
+      const res = await axios.post(`${API_BASE_URL}/check_elastic`, { index, query });
+      if (res.data.status === 'success') {
+        return { status: 'success', count: res.data.count, has_data: res.data.count > 0 };
+      }
+      return { status: 'error' };
+    } catch (e) {
+      return { status: 'error' };
+    }
+  };
+
+  const handleCheckRule = async (ruleId, query, tech, indexName) => {
+    setRuleStatuses(prev => ({ ...prev, [ruleId]: { loading: true } }));
+    
+    if (tech === 'elastic_log') {
+       const result = await checkElasticRule(indexName, query);
+       setRuleStatuses(prev => ({ 
+         ...prev, 
+         [ruleId]: { 
+           loading: false, 
+           status: result.status === 'success' ? 'success' : 'error',
+           has_data: result.has_data,
+           count: result.count
+         } 
+       }));
+    } else {
+       const result = await checkPromQLRule(query);
+       setRuleStatuses(prev => ({ 
+         ...prev, 
+         [ruleId]: { 
+           loading: false, 
+           status: result.status,
+           failingParts: result.failing_parts || []
+         } 
+       }));
+    }
+  };
+
+  const checkAllRules = async () => {
+    const statuses = {};
+    for (const rule of rules) {
+      statuses[rule.id] = { loading: true };
+    }
+    setRuleStatuses(statuses);
+
+    for (const rule of rules) {
+      if (rule.tech === 'CUSTOM' || rule.tech === 'info') {
+         setRuleStatuses(prev => ({ ...prev, [rule.id]: { loading: false, status: 'success' } }));
+         continue;
+      }
+      
+      if (rule.tech === 'elastic_log') {
+         const result = await checkElasticRule(rule.indexName, rule.query);
+         setRuleStatuses(prev => ({
+           ...prev,
+           [rule.id]: {
+             loading: false,
+             status: result.status === 'success' ? 'success' : 'error',
+             has_data: result.has_data,
+             count: result.count
+           }
+         }));
+      } else {
+         const result = await checkPromQLRule(rule.query);
+         setRuleStatuses(prev => ({
+           ...prev,
+           [rule.id]: {
+             loading: false,
+             status: result.status,
+             failingParts: result.failing_parts || []
+           }
+         }));
+      }
+    }
+  };
+
+  const toggleAll = () => {
+      if (selectedRecords.length === rules.length) {
+          setSelectedRecords([]);
+      } else {
+          setSelectedRecords(rules.map(r => r.id));
+      }
+  };
+
+  const toggleRecord = (id) => {
+      if (selectedRecords.includes(id)) {
+          setSelectedRecords(selectedRecords.filter(recId => recId !== id));
+      } else {
+          setSelectedRecords([...selectedRecords, id]);
+      }
+  };
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <Group justify="space-between" mb="md" dir="rtl">
+        <Group>
+          <Button variant="light" color="blue" onClick={checkAllRules} leftSection={<IconFileSearch size={16} />}>
+            בדוק תקינות לכל החוקים בטבלה
+          </Button>
+          {selectedRecords.length > 0 && userRole !== 'viewer' && (
+             <Button color="red" leftSection={<IconTrash size={16}/>} onClick={() => {
+                 onBulkDelete(selectedRecords);
+                 setSelectedRecords([]);
+             }}>
+                 מחק {selectedRecords.length} מסומנים
+             </Button>
+          )}
+        </Group>
+      </Group>
+
+      <Table highlightOnHover dir="rtl">
+        <Table.Thead>
+          <Table.Tr>
+            {userRole !== 'viewer' && (
+              <Table.Th w={40}>
+                <Checkbox 
+                   checked={selectedRecords.length === rules.length && rules.length > 0} 
+                   indeterminate={selectedRecords.length > 0 && selectedRecords.length < rules.length}
+                   onChange={toggleAll}
+                />
+              </Table.Th>
+            )}
+            <Table.Th>שם החוק + מטרה</Table.Th>
+            <Table.Th>שאילתה / שליפה</Table.Th>
+            <Table.Th>סטטוס (Debug)</Table.Th>
+            <Table.Th>שם צוות</Table.Th>
+            <Table.Th>טכנולוגיה</Table.Th>
+            <Table.Th>פעולות</Table.Th>
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
+          {rules.map((rule) => {
+            const status = ruleStatuses[rule.id];
+            
+            return (
+              <Table.Tr key={rule.id}>
+                {userRole !== 'viewer' && (
+                  <Table.Td>
+                    <Checkbox checked={selectedRecords.includes(rule.id)} onChange={() => toggleRecord(rule.id)} />
+                  </Table.Td>
+                )}
+                
+                {/* שם החוק והמטרה */}
+                <Table.Td>
+                  <Group gap="xs">
+                    <Image src={getNiturIconSrc(rule.tech)} w={20} h={20} />
+                    <Text fw={700} c="blue.9" style={{ cursor: 'pointer' }} onClick={() => {
+                       setSelectedRuleData({ query: rule.query, failingParts: status?.failingParts || [] });
+                       setQueryModalOpen(true);
+                    }}>
+                      {rule.name}
+                    </Text>
+                    {rule.name.startsWith('neptune_generic_') && (
+                      <Badge size="xs" color="gray" variant="outline">גנרי</Badge>
+                    )}
+                  </Group>
+                  <Text size="xs" fw={600} mt={4} c="dark.5">
+                    מטרה: {rule.purpose || 'לא מוגדרת מטרה'}
+                  </Text>
+                </Table.Td>
+                
+                {/* עמודה חדשה של השאילתה עם אפשרות העתקה */}
+                <Table.Td>
+                  <Group wrap="nowrap" gap="xs">
+                     <Tooltip label="העתק שאילתה לשליפה">
+                        <CopyButton value={rule.query} timeout={2000}>
+                           {({ copied, copy }) => (
+                              <ActionIcon color={copied ? 'teal' : 'gray'} variant="light" onClick={copy}>
+                                 {copied ? <IconCheck size={16} /> : <IconCopy size={16} />}
+                              </ActionIcon>
+                           )}
+                        </CopyButton>
+                     </Tooltip>
+                     <Code 
+                        truncate 
+                        style={{ maxWidth: '200px', direction: 'ltr', textAlign: 'left', cursor: 'pointer' }} 
+                        onClick={() => {
+                           setSelectedRuleData({ query: rule.query, failingParts: status?.failingParts || [] });
+                           setQueryModalOpen(true);
+                        }}
+                        title="לחץ כאן לצפייה בשאילתה המלאה"
+                     >
+                        {rule.query}
+                     </Code>
+                  </Group>
+                </Table.Td>
+
+                <Table.Td>
+                  {status?.loading ? (
+                    <Loader size="xs" />
+                  ) : status?.status === 'success' ? (
+                    <Tooltip label={rule.tech === 'elastic_log' ? `תקין. נמצאו ${status.count} רשומות (ללא ספים).` : "תקין. המטריקה קיימת ומחזירה נתונים ב-Prometheus (ללא התחשבות בספים)."}>
+                      <Badge color="teal" variant="light" leftSection={<IconCheck size={12} />}>
+                        תקין
+                      </Badge>
+                    </Tooltip>
+                  ) : status?.status === 'partial' ? (
+                    <Tooltip label="חלק מהמטריקות בשאילתה לא מחזירות נתונים כרגע.">
+                      <Badge color="yellow" variant="light" leftSection={<IconAlertTriangle size={12} />}>
+                        חלקי
+                      </Badge>
+                    </Tooltip>
+                  ) : status?.status === 'error' ? (
+                    <Tooltip label="המטריקה לא נמצאה או שאין נתונים בשרת (ייתכן שרכיב כבוי או שם שגוי).">
+                      <Badge color="red" variant="light" leftSection={<IconX size={12} />}>
+                        שגיאה / חסר מידע
+                      </Badge>
+                    </Tooltip>
+                  ) : (
+                    <Button variant="subtle" size="compact-xs" onClick={() => handleCheckRule(rule.id, rule.query, rule.tech, rule.indexName)}>
+                      בדוק
+                    </Button>
+                  )}
+                </Table.Td>
+
+                <Table.Td>{rule.team}</Table.Td>
+                <Table.Td>
+                  <Badge color="blue" variant="light">{rule.tech}</Badge>
+                </Table.Td>
+                
+                <Table.Td>
+                  <Group gap={0} justify="flex-start">
+                    {userRole !== 'viewer' && (
+                       <ActionIcon color="blue" variant="subtle" onClick={() => onEdit(rule)}>
+                         <IconEdit size={18} />
+                       </ActionIcon>
+                    )}
+                    <Menu position="bottom-end" withArrow>
+                      <Menu.Target>
+                        <ActionIcon color="gray" variant="subtle">
+                          <IconDotsVertical size={18} />
+                        </ActionIcon>
+                      </Menu.Target>
+                      <Menu.Dropdown dir="rtl">
+                        <Menu.Item leftSection={<IconHistory size={16} />} onClick={() => onViewHistory(rule)}>
+                          היסטוריית שינויים (Git)
+                        </Menu.Item>
+                        {(rule.application || rule.node) && (
+                          <Menu.Item leftSection={<IconHandClick size={16} />} onClick={() => onNavigate(rule)}>
+                            קפוץ לרכיב בקנבס
+                          </Menu.Item>
+                        )}
+                        {userRole !== 'viewer' && (
+                           <Menu.Item leftSection={<IconTrash size={16} />} color="red" onClick={() => onDelete(rule.id)}>
+                             מחק חוק
+                           </Menu.Item>
+                        )}
+                      </Menu.Dropdown>
+                    </Menu>
+                  </Group>
+                </Table.Td>
+              </Table.Tr>
+            );
+          })}
+        </Table.Tbody>
+      </Table>
+
+      <Modal opened={queryModalOpen} onClose={() => setQueryModalOpen(false)} title={<Text fw={700} dir="rtl" ta="right" w="100%">תצוגת שאילתה (Debug)</Text>} centered dir="ltr" size="xl">
+        <Stack gap="xs">
+          {selectedRuleData.query.split(/\s+or\s+/).map((part, idx) => {
+            const trimmedPart = part.trim();
+            const isFailing = selectedRuleData.failingParts.includes(trimmedPart);
+            
+            return (
+              <div key={idx}>
+                {idx > 0 && <Text c="dimmed" fw={700} mb={4} ta="left">or</Text>}
+                <Group wrap="nowrap" align="stretch">
+                  <Code block color={isFailing ? "red.9" : "dark.8"} c={isFailing ? "white" : "blue.4"} style={{ flexGrow: 1, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: '14px', lineHeight: '1.6', opacity: isFailing ? 0.9 : 1, border: isFailing ? '1px solid #c92a2a' : 'none' }}>
+                    {trimmedPart}
+                  </Code>
+                  {isFailing && (
+                    <Tooltip label="מטריקה זו נבדקה מול השרת ולא החזירה נתונים. בדוק את השם בקנבס.">
+                      <ActionIcon color="red" variant="light" size="lg" style={{ alignSelf: 'center' }}>
+                         <IconAlertTriangle size={20} />
+                      </ActionIcon>
+                    </Tooltip>
+                  )}
+                </Group>
+              </div>
+            );
+          })}
+        </Stack>
+      </Modal>
+    </div>
+  );
+}
