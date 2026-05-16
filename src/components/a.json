@@ -1,0 +1,278 @@
+[
+  {
+    "value": "rabbit",
+    "label": "RabbitMQ",
+    "icon": "rabbit",
+    "metricType": "messages",
+    "fields": [
+      {
+        "name": "vhost",
+        "label": "VHOST (לדוגמה /)",
+        "pattern": "^/.*",
+        "patternMsg": "חייב להתחיל בלוכסן"
+      },
+      {
+        "name": "queue",
+        "label": "שם תור"
+      }
+    ],
+    "labelTemplate": "{vhost}-{queue}",
+    "thresholds": [
+      {
+        "name": "majorThreshold",
+        "label": "Major (הודעות תקועות)",
+        "min": 0,
+        "max": 1000000
+      },
+      {
+        "name": "criticalThreshold",
+        "label": "Critical (הודעות תקועות)",
+        "min": 0,
+        "max": 1000000
+      }
+    ]
+  },
+  {
+    "value": "nifi",
+    "label": "NiFi",
+    "icon": "nifi",
+    "metricType": "messages",
+    "fields": [
+      {
+        "name": "componentName",
+        "label": "שם רכיב"
+      }
+    ],
+    "labelTemplate": "{componentName}",
+    "thresholds": [
+      {
+        "name": "majorThreshold",
+        "label": "Major (קבצים תקועים)",
+        "min": 0
+      },
+      {
+        "name": "criticalThreshold",
+        "label": "Critical (קבצים תקועים)",
+        "min": 0
+      }
+    ]
+  },
+  {
+    "value": "kafka",
+    "label": "Kafka",
+    "icon": "kafka",
+    "metricType": "custom",
+    "fields": [
+      {
+        "name": "componentName",
+        "label": "שם אשכול/רכיב"
+      }
+    ],
+    "labelTemplate": "{componentName}",
+    "thresholds": [
+      {
+        "name": "majorThreshold",
+        "label": "Lag Major",
+        "min": 0
+      },
+      {
+        "name": "criticalThreshold",
+        "label": "Lag Critical",
+        "min": 0
+      }
+    ]
+  },
+  {
+    "value": "elastic",
+    "label": "Elastic (ECK)",
+    "icon": "elastic",
+    "metricType": "logs",
+    "fields": [
+      {
+        "name": "envName",
+        "label": "שם סביבה"
+      }
+    ],
+    "labelTemplate": "{envName}",
+    "thresholds": []
+  },
+  {
+    "value": "s3",
+    "label": "S3 Storage",
+    "icon": "s3",
+    "metricType": "storage",
+    "fields": [
+      {
+        "name": "userId",
+        "label": "User ID"
+      }
+    ],
+    "labelTemplate": "{userId}",
+    "thresholds": [
+      {
+        "name": "storageMajor",
+        "label": "Storage Major %",
+        "min": 0,
+        "max": 100
+      },
+      {
+        "name": "storageCritical",
+        "label": "Storage Critical %",
+        "min": 0,
+        "max": 100
+      },
+      {
+        "name": "objectsMajor",
+        "label": "Objects Major",
+        "min": 0
+      },
+      {
+        "name": "objectsCritical",
+        "label": "Objects Critical",
+        "min": 0
+      }
+    ]
+  },
+  {
+    "value": "mongo",
+    "label": "MongoDB",
+    "icon": "mongo",
+    "metricType": "storage",
+    "fields": [
+      {
+        "name": "mongoDbName",
+        "label": "DB Name",
+        "required": true
+      },
+      {
+        "name": "mongoConn",
+        "label": "Connection String (לא חובה)",
+        "required": false
+      }
+    ],
+    "labelTemplate": "{mongoDbName}",
+    "thresholds": [
+      {
+        "name": "majorThreshold",
+        "label": "Major Storage %",
+        "min": 0,
+        "max": 100
+      },
+      {
+        "name": "criticalThreshold",
+        "label": "Critical Storage %",
+        "min": 0,
+        "max": 100
+      }
+    ]
+  },
+  {
+    "value": "linux",
+    "label": "Linux Server",
+    "icon": "linux",
+    "metricType": "infrastructure",
+    "fields": [
+      {
+        "name": "serverName",
+        "label": "שם שרת"
+      }
+    ],
+    "labelTemplate": "{serverName}",
+    "thresholds": [
+      {
+        "name": "majorThreshold",
+        "label": "CPU Major %",
+        "min": 0,
+        "max": 100
+      },
+      {
+        "name": "criticalThreshold",
+        "label": "CPU Critical %",
+        "min": 0,
+        "max": 100
+      }
+    ]
+  },
+  {
+    "value": "windows",
+    "label": "Windows Server",
+    "icon": "windows",
+    "metricType": "infrastructure",
+    "fields": [
+      {
+        "name": "serverName",
+        "label": "שם שרת"
+      }
+    ],
+    "labelTemplate": "{serverName}",
+    "thresholds": [
+      {
+        "name": "majorThreshold",
+        "label": "CPU Major %",
+        "min": 0,
+        "max": 100
+      },
+      {
+        "name": "criticalThreshold",
+        "label": "CPU Critical %",
+        "min": 0,
+        "max": 100
+      }
+    ]
+  },
+  {
+    "value": "nfs",
+    "label": "NFS",
+    "icon": "nfs",
+    "metricType": "storage",
+    "fields": [
+      {
+        "name": "folderName",
+        "label": "שם תיקייה"
+      }
+    ],
+    "labelTemplate": "{folderName}",
+    "thresholds": [
+      {
+        "name": "majorThreshold",
+        "label": "Major Storage %",
+        "min": 0,
+        "max": 100
+      },
+      {
+        "name": "criticalThreshold",
+        "label": "Critical Storage %",
+        "min": 0,
+        "max": 100
+      }
+    ]
+  },
+  {
+    "value": "dp",
+    "label": "DataPower",
+    "icon": "dp",
+    "metricType": "infrastructure",
+    "fields": [
+      {
+        "name": "componentName",
+        "label": "שם רכיב"
+      }
+    ],
+    "labelTemplate": "{componentName}",
+    "thresholds": []
+  },
+  {
+    "value": "info",
+    "label": "INFO / הערה",
+    "icon": "info",
+    "metricType": "none",
+    "fields": [
+      {
+        "name": "componentName",
+        "label": "כותרת"
+      }
+    ],
+    "labelTemplate": "{componentName}",
+    "thresholds": []
+  }
+]
