@@ -1,21 +1,22 @@
 // Dashboard.jsx
 import React, { useState, useEffect, Fragment, useRef } from 'react';
 import axios from 'axios';
-import { ThemeIcon, AppShell, Container, Paper, Group, Title, Text, Button, TextInput, Stack, Menu, Tabs, SimpleGrid, Card, CopyButton, Code, ActionIcon, Select, Badge, Modal, Grid, Center, Loader, Table, ScrollArea, Accordion, Image, PasswordInput, Textarea, List, NumberInput, Tooltip, Affix, Transition, Collapse, Checkbox, Divider, Alert, Radio } from '@mantine/core';
+import { Box, ThemeIcon, AppShell, Container, Paper, Group, Title, Text, Button, TextInput, Stack, Menu, Tabs, SimpleGrid, Card, CopyButton, Code, ActionIcon, Select, Badge, Modal, Grid, Center, Loader, Table, ScrollArea, Accordion, Image, PasswordInput, Textarea, List, NumberInput, Tooltip, Affix, Transition, Collapse, Checkbox, Divider, Alert, Radio } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconChevronUp, IconSend, IconListDetails, IconSitemap, IconFileText, IconShield, IconRocket, IconRadar, IconAppWindow, IconTerminal2, IconCopy, IconCheck, IconFilter, IconServer, IconSettings, IconTrash, IconPlus, IconDeviceFloppy, IconSchool, IconReportAnalytics, IconFolder, IconPlayerPlay, IconHistory, IconCode, IconChartLine, IconArrowDownCircle, IconAlertTriangle, IconList, IconBriefcase, IconSearch, IconWorld, IconRestore, IconX, IconEdit, IconCube, IconDatabase, IconLogin, IconLogout, IconClock, IconPlayerPause, IconSearch as IconSearch2, IconChevronRight, IconChevronLeft, IconCrosshair, IconInfoCircle, IconActivity, IconClipboardList } from '@tabler/icons-react';
+import { IconDotsVertical, IconChevronUp, IconSend, IconListDetails, IconSitemap, IconFileText, IconShield, IconRocket, IconRadar, IconAppWindow, IconTerminal2, IconCopy, IconCheck, IconFilter, IconServer, IconSettings, IconTrash, IconPlus, IconDeviceFloppy, IconSchool, IconReportAnalytics, IconFolder, IconPlayerPlay, IconHistory, IconCode, IconChartLine, IconArrowDownCircle, IconAlertTriangle, IconList, IconBriefcase, IconSearch, IconWorld, IconRestore, IconX, IconEdit, IconCube, IconDatabase, IconLogin, IconLogout, IconClock, IconPlayerPause, IconSearch as IconSearch2, IconChevronRight, IconChevronLeft, IconCrosshair, IconInfoCircle, IconActivity, IconClipboardList } from '@tabler/icons-react';
 import RulesTable from './RulesTable';
 import { AddRuleModal } from './AddRuleModal';
 import ArchitectureScanner from './ArchitectureScanner';
 import bgDashboard from '../assets/background_dashbord.png';
 import { API_BASE_URL } from '../config';
-import Editor from '@monaco-editor/react';
+import Editor, { loader } from '@monaco-editor/react';
+import * as monaco from 'monaco-editor';
 import iconLogs from '../assets/iconNitur/logs.webp';
 import iconMessages from '../assets/iconNitur/messages.png';
 import iconStorage from '../assets/iconNitur/storage.png';
 import iconCustom from '../assets/iconNitur/custom.png';
 import image1 from '../assets/image_1.png';
-
+loader.config({ monaco });
 const pulseAnimation = `
   @keyframes activePulse {
     0% { box-shadow: 0 0 0 0 rgba(51, 154, 240, 0.7); transform: scale(1); border-color: #339af0; }
@@ -277,9 +278,11 @@ export default function Dashboard({ onLogout, username, userRole: initialRole })
       timeRange: '15m', 
       reason: '', 
       maktag: '',
+      impact: '',
       mappingType: 'node', 
       node: '', 
-      mappingTemplate: '' 
+      mappingTemplate: '',
+      ruleName: ''
   });
   const [isQueryTesting, setIsQueryTesting] = useState(false);
   const [queryTestResult, setQueryTestResult] = useState(null);
@@ -3198,6 +3201,18 @@ const handleCreateAutomation = async () => {
                                                   disabled={!newIndexNameInput.trim()}
                                                   onClick={async () => {
                                                       const indexName = newIndexNameInput.trim();
+                                                      // בדיקה אם האינדקס כבר קיים בסביבה (למניעת כפילויות)
+                                                      const envRules = rules.filter(r => r.tech === 'elastic_log' && r.elasticEnv === selectedEnvForMgmt);
+                                                      const mergedIndexes = Array.from(new Set([
+                                                          ...(customIndexes[selectedEnvForMgmt] || []),
+                                                          ...envRules.map(r => r.indexName).filter(Boolean)
+                                                      ]));
+                                                      
+                                                      if (mergedIndexes.includes(indexName)) {
+                                                          alert('אינדקס זה כבר קיים תחת סביבה זו! לא ניתן ליצור כפילות.');
+                                                          return;
+                                                      }
+
                                                       try {
                                                           await axios.post(`${API_BASE_URL}/api/create-elastic-index`, {
                                                               env: selectedEnvForMgmt,
@@ -3254,164 +3269,172 @@ const handleCreateAutomation = async () => {
                                           {mergedIndexes.map((indexName) => {
                                               const indexRules = envRules.filter(r => r.indexName === indexName);
                                               return (
-                                                  <Tabs.Panel key={indexName} value={indexName} pt="xs">
-                                                      <Stack gap="md">
-                                                          <Text fw={800} size="sm" c="dimmed">שליפות ושאילתות ניטור פעילות תחת אינדקס זה:</Text>
+                                                  <Tabs.Panel key={indexName} value={indexName} pt="md">
+                                                      <Stack gap="xl">
+                                                          <Group justify="space-between">
+                                                              <Text fw={900} size="xl" c="teal.9">ניהול חוקי התראה וניטור לוגים</Text>
+                                                              <Badge color="teal" variant="light" size="lg" leftSection={<IconDatabase size={16} />}>
+                                                                  {indexRules.length} חוקים פעילים באינדקס זה
+                                                              </Badge>
+                                                          </Group>
 
-                                                          {/* רשימת השליפות המרובות הקיימות */}
-                                                          <Stack gap="sm">
+                                                          {/* רשימת השליפות המרובות הקיימות (תצוגה מעגלית / Grid) */}
+                                                          <Group justify="center" gap="xl" style={{ display: 'flex', flexWrap: 'wrap' }}>
                                                               {indexRules.length === 0 ? (
-                                                                  <Paper withBorder p="xl" bg="white" radius="md" style={{ borderStyle: 'dashed' }}>
-                                                                      <Text size="xs" c="dimmed" ta="center" fw={700}>אין שליפות לוגים מוגדרות תחת אינדקס זה כרגע במערכת.</Text>
+                                                                  <Paper withBorder p="xl" bg="white" radius="md" style={{ borderStyle: 'dashed', width: '100%' }}>
+                                                                      <Center>
+                                                                          <Stack align="center" gap="xs">
+                                                                              <IconSearch2 size={40} color="#ced4da" />
+                                                                              <Text size="md" c="dimmed" fw={700}>אין חוקי ניטור מוגדרים לאינדקס זה כרגע.</Text>
+                                                                          </Stack>
+                                                                      </Center>
                                                                   </Paper>
                                                               ) : (
-                                                                  <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
-                                                                      {indexRules.map((r, rIdx) => {
-                                                                          // השאילתה והזמן הנוכחיים כפי שנערכים ברגע זה (או הערך השמור אם לא נערך)
-                                                                          const rid = r.id || r._id;
-                                                                          const currentEditedQuery = editingQueries[rid] !== undefined ? editingQueries[rid] : (r.query || '*');
-                                                                          const currentEditedTime = editingTimeRanges[rid] !== undefined ? editingTimeRanges[rid] : (r.timeRange || '15m');
-                                                                          
-                                                                          const lastEditor = r.history && r.history.length > 0 ? r.history[r.history.length - 1].user : (r.user || localStorage.getItem('username') || 'Ariel');
+                                                                  indexRules.map((r, rIdx) => {
+                                                                      const rid = r.id || r._id;
+                                                                      const currentEditedQuery = editingQueries[rid] !== undefined ? editingQueries[rid] : (r.query || '*');
+                                                                      const currentEditedTime = editingTimeRanges[rid] !== undefined ? editingTimeRanges[rid] : (r.timeRange || '15m');
+                                                                      const isExpanded = expandedElasticRuleId === rid;
 
-                                                                          return (
-                                                                              <Card key={rIdx} withBorder radius="lg" bg="white" shadow="sm" p="md" style={{ display: 'flex', flexDirection: 'column', transition: 'all 0.25s ease', border: '1px solid #e9ecef', '&:hover': { transform: 'translateY(-3px)', boxShadow: '0 8px 24px rgba(0,0,0,0.08)', borderColor: '#ced4da' } }}>
-                                                                                  {/* כותרת הקלף: תגים ופעולות ניהול */}
-                                                                                  <Group justify="space-between" align="center" mb="sm">
-                                                                                      <Group gap="xs">
-                                                                                          <Badge color="blue" variant="light" size="sm" radius="sm" leftSection={<IconClock size={12} />}>{r.timeRange || '15m'}</Badge>
-                                                                                          {r.maktag && <Badge color="grape" variant="outline" size="sm" radius="sm">מקת"ג: {r.maktag}</Badge>}
-                                                                                      </Group>
+                                                                      return (
+                                                                          <Paper key={rIdx} shadow={isExpanded ? "md" : "sm"} style={{ 
+                                                                              width: isExpanded ? '100%' : '250px',
+                                                                              minHeight: isExpanded ? 'auto' : '250px',
+                                                                              borderRadius: isExpanded ? '16px' : '50%',
+                                                                              border: '4px solid #20c997',
+                                                                              transition: 'all 0.4s ease',
+                                                                              overflow: 'hidden',
+                                                                              display: 'flex',
+                                                                              flexDirection: 'column',
+                                                                              justifyContent: 'center',
+                                                                              alignItems: 'center',
+                                                                              backgroundColor: isExpanded ? '#f8f9fa' : 'white',
+                                                                              padding: isExpanded ? '0' : '20px',
+                                                                              position: 'relative'
+                                                                          }}>
+                                                                              {!isExpanded ? (
+                                                                                  // תצוגת העיגול (Circle View)
+                                                                                  <Stack gap="sm" align="center" style={{ textAlign: 'center', width: '100%' }}>
+                                                                                      <Text fw={900} size="lg" c="dark.9" lineClamp={2} title={r.name}>{r.name}</Text>
+                                                                                      <Text size="xs" c="gray.6" fw={700} lineClamp={2} title={r.purposeRule || r.purpose}>{r.purposeRule || r.purpose || 'ללא מטרה מוגדרת'}</Text>
                                                                                       
-                                                                                      <Group gap={4}>
-                                                                                          <Tooltip label="היסטוריית עריכות">
-                                                                                              <ActionIcon color="indigo" variant="subtle" size="sm" onClick={() => { setSelectedRuleForHistory(r); setHistoryOpened(true); }}><IconHistory size={16} /></ActionIcon>
-                                                                                          </Tooltip>
-                                                                                          <Tooltip label="מחיקת שליפה">
-                                                                                              <ActionIcon color="red" variant="subtle" size="sm" onClick={async () => {
-                                                                                                  if (window.confirm(`האם למחוק שליפה זו מהאינדקס?`)) {
-                                                                                                      await axios.delete(`${API_BASE_URL}/rules/${rid}`, { headers: { 'x-user': localStorage.getItem('username') || 'Ariel' } });
-                                                                                                      fetchRules();
-                                                                                                  }
-                                                                                              }}><IconTrash size={16} /></ActionIcon>
-                                                                                          </Tooltip>
-                                                                                      </Group>
-                                                                                  </Group>
+                                                                                      {r.node && r.node !== 'GENERIC' && r.node !== 'SYS_GENERIC' ? (
+                                                                                          <Badge size="xs" color="blue" variant="light" title="שיוך ישיר לרכיב מוגדר">שיוך לרכיב: {r.node}</Badge>
+                                                                                      ) : (
+                                                                                          <Badge size="xs" color="violet" variant="light" title="שיוך דינמי לפי תבנית">שיוך דינמי: {r.mappingTemplate}</Badge>
+                                                                                      )}
 
-                                                                                  {/* גוף הקלף: שם השליפה ומטרה */}
-                                                                                  <Stack gap={4} style={{ flexGrow: 1 }} mb="xs">
-                                                                                      <Text fw={900} size="lg" c="dark.9" style={{ direction: 'ltr', textAlign: 'left', letterSpacing: '-0.3px' }}>
-                                                                                          {r.name}
-                                                                                      </Text>
-                                                                                      <Text size="sm" c="gray.6" fw={500} style={{ direction: 'rtl', textAlign: 'right', lineHeight: '1.4' }}>
-                                                                                          {r.purposeRule || r.purpose || 'ללא מטרה מוגדרת'}
-                                                                                      </Text>
-                                                                                      
-                                                                                      <Group justify="flex-end" align="center" mt="sm">
-                                                                                          {r.node && r.node !== 'GENERIC' && r.node !== 'SYS_GENERIC' ? (
-                                                                                              <Badge size="xs" color="teal" variant="dot">רכיב: {r.node}</Badge>
-                                                                                          ) : (
-                                                                                              <Badge size="xs" color="violet" variant="dot">תבנית: {r.mappingTemplate}</Badge>
-                                                                                          )}
-                                                                                      </Group>
-                                                                                  </Stack>
+                                                                                      <Badge color="dark" variant="outline" size="xs" leftSection={<IconClock size={10} />}>
+                                                                                          זמן אחורה: {r.timeRange || '15m'}
+                                                                                      </Badge>
 
-                                                                                  <Divider my="sm" color="gray.2" />
-
-                                                                                  {/* אזור פעולות תחתי: הרצה והצגת שליפה */}
-                                                                                  <Group justify="space-between" align="center">
-                                                                                      <Tooltip label="הרץ שליפה עם הזמן והקוד המעודכנים כעת">
-                                                                                          <Button 
-                                                                                              variant="light" 
-                                                                                              color={liveCounts[rid] !== undefined ? "teal" : "orange"}
-                                                                                              size="xs" 
-                                                                                              radius="xl"
-                                                                                              leftSection={isFetchingCount[rid] ? <Loader size="xs" color="orange" /> : <IconPlayerPlay size={14} />}
-                                                                                              onClick={async () => {
-                                                                                                  setIsFetchingCount(prev => ({...prev, [rid]: true}));
-                                                                                                  try {
-                                                                                                      const res = await axios.post(`${API_BASE_URL}/api/elastic-count`, {
-                                                                                                          env: r.elasticEnv || selectedEnvForMgmt || "unknown_env",
-                                                                                                          index: r.indexName || indexName || "unknown_index",
-                                                                                                          query: currentEditedQuery,  // משתמש בשאילתה הערוכה בזמן אמת!
-                                                                                                          timeRange: currentEditedTime // משתמש בזמן הערוך בזמן אמת!
-                                                                                                      });
-                                                                                                      const val = res.data.count !== undefined ? res.data.count : (res.data.value !== undefined ? res.data.value : JSON.stringify(res.data));
-                                                                                                      setLiveCounts(prev => ({...prev, [rid]: val}));
-                                                                                                  } catch(e) {
-                                                                                                      setLiveCounts(prev => ({...prev, [rid]: 'שגיאה'}));
-                                                                                                  }
-                                                                                                  setIsFetchingCount(prev => ({...prev, [rid]: false}));
-                                                                                              }}
-                                                                                          >
-                                                                                              {liveCounts[rid] !== undefined ? `תוצאה: ${liveCounts[rid]}` : 'בדוק ערך נוכחי'}
-                                                                                          </Button>
-                                                                                      </Tooltip>
+                                                                                      <Button variant="subtle" color="teal" size="xs" onClick={() => setExpandedElasticRuleId(rid)} style={{ marginTop: '5px' }}>
+                                                                                          לחץ כאן לשליפה
+                                                                                      </Button>
 
                                                                                       <Button 
-                                                                                          variant="subtle" 
-                                                                                          color="blue" 
+                                                                                          variant={liveCounts[rid] !== undefined ? "light" : "white"}
+                                                                                          color={liveCounts[rid] !== undefined ? "teal" : "gray"}
                                                                                           size="xs" 
-                                                                                          leftSection={expandedElasticRuleId === rid ? <IconChevronUp size={14} /> : <IconCode size={14} />}
-                                                                                          onClick={() => {
-                                                                                              if (expandedElasticRuleId === rid) {
-                                                                                                  setExpandedElasticRuleId(null);
-                                                                                              } else {
-                                                                                                  setExpandedElasticRuleId(rid);
-                                                                                                  // אתחול הסטייטים בעת פתיחת החלונית
-                                                                                                  setEditingQueries(prev => ({...prev, [rid]: r.query || ''}));
-                                                                                                  setEditingTimeRanges(prev => ({...prev, [rid]: r.timeRange || '15m'}));
+                                                                                          radius="xl"
+                                                                                          loading={isFetchingCount[rid]}
+                                                                                          leftSection={<IconPlayerPlay size={12} />}
+                                                                                          onClick={async (e) => {
+                                                                                              e.stopPropagation();
+                                                                                              setIsFetchingCount(prev => ({...prev, [rid]: true}));
+                                                                                              try {
+                                                                                                  const res = await axios.post(`${API_BASE_URL}/api/elastic-count`, {
+                                                                                                      env: r.elasticEnv || selectedEnvForMgmt || "unknown_env",
+                                                                                                      index: r.indexName || indexName || "unknown_index",
+                                                                                                      query: currentEditedQuery,
+                                                                                                      timeRange: currentEditedTime
+                                                                                                  });
+                                                                                                  const val = res.data.count !== undefined ? res.data.count : (res.data.value !== undefined ? res.data.value : JSON.stringify(res.data));
+                                                                                                  setLiveCounts(prev => ({...prev, [rid]: val}));
+                                                                                              } catch(err) {
+                                                                                                  setLiveCounts(prev => ({...prev, [rid]: 'שגיאה'}));
                                                                                               }
+                                                                                              setIsFetchingCount(prev => ({...prev, [rid]: false}));
                                                                                           }}
                                                                                       >
-                                                                                          {expandedElasticRuleId === rid ? 'הסתר עורך' : 'הצג / ערוך שליפה'}
+                                                                                          {liveCounts[rid] !== undefined ? `${liveCounts[rid]} רשומות` : 'הרץ בדיקה'}
                                                                                       </Button>
-                                                                                  </Group>
+                                                                                  </Stack>
+                                                                              ) : (
+                                                                                  // תצוגה מורחבת (Expanded View) - נפרס על פני כל הרוחב
+                                                                                  <Box w="100%" p="md">
+                                                                                      <Group justify="space-between" mb="md" align="flex-start">
+                                                                                          <Group gap="md">
+                                                                                              <ActionIcon variant="light" color="teal" size="lg" radius="xl" onClick={() => setExpandedElasticRuleId(null)}>
+                                                                                                  <IconChevronUp size={20} />
+                                                                                              </ActionIcon>
+                                                                                              <Stack gap={0}>
+                                                                                                  <Text fw={900} size="lg" c="dark.9">{r.name}</Text>
+                                                                                                  <Text size="sm" c="gray.6" fw={500}>{r.purposeRule || r.purpose || 'ללא מטרה מוגדרת'}</Text>
+                                                                                              </Stack>
+                                                                                          </Group>
+                                                                                          <Group gap="sm">
+                                                                                              {r.maktag && <Badge color="grape" variant="outline" size="sm">מקת"ג: {r.maktag}</Badge>}
+                                                                                              <Menu position="bottom-end" shadow="md" withArrow>
+                                                                                                  <Menu.Target>
+                                                                                                      <ActionIcon variant="subtle" color="gray"><IconDotsVertical size={18} /></ActionIcon>
+                                                                                                  </Menu.Target>
+                                                                                                  <Menu.Dropdown dir="rtl">
+                                                                                                      <Menu.Item leftSection={<IconHistory size={16} />} onClick={() => { setSelectedRuleForHistory(r); setHistoryOpened(true); }}>היסטוריית שינויים</Menu.Item>
+                                                                                                      <Menu.Divider />
+                                                                                                      <Menu.Item color="red" leftSection={<IconTrash size={16} />} onClick={async () => {
+                                                                                                          if (window.confirm(`האם למחוק שליפה זו מהאינדקס?`)) {
+                                                                                                              await axios.delete(`${API_BASE_URL}/rules/${rid}`, { headers: { 'x-user': localStorage.getItem('username') || 'Ariel' } });
+                                                                                                              fetchRules();
+                                                                                                          }
+                                                                                                      }}>מחק חוק</Menu.Item>
+                                                                                                  </Menu.Dropdown>
+                                                                                              </Menu>
+                                                                                          </Group>
+                                                                                      </Group>
 
-                                                                                  {/* אזור העריכה הנפתח */}
-                                                                                  <Collapse in={expandedElasticRuleId === rid} mt="md">
-                                                                                      <Paper withBorder p="sm" radius="md" bg="#f8f9fa" shadow="none">
+                                                                                      {/* עורך ה-KQL וה-JSON */}
+                                                                                      <Paper p="md" bg="white" radius="md" withBorder>
                                                                                           <Tabs defaultValue="edit" color="indigo" variant="pills" radius="sm">
-                                                                                              <Tabs.List grow mb="sm">
-                                                                                                  <Tabs.Tab value="edit"><Text size="xs" fw={700}>ערוך שאילתה (KQL)</Text></Tabs.Tab>
-                                                                                                  <Tabs.Tab value="qsl"><Text size="xs" fw={700}>תצוגת המלאה (QSL + Time)</Text></Tabs.Tab>
+                                                                                              <Tabs.List mb="sm">
+                                                                                                  <Tabs.Tab value="edit" leftSection={<IconCode size={14} />}><Text size="sm" fw={700}>הפורמט המקורי (KQL)</Text></Tabs.Tab>
+                                                                                                  <Tabs.Tab value="qsl" leftSection={<IconDatabase size={14} />}><Text size="sm" fw={700}>תצוגת JSON Raw</Text></Tabs.Tab>
                                                                                               </Tabs.List>
                                                                                               
                                                                                               <Tabs.Panel value="edit" pt="xs">
-                                                                                                  {/* בחירת זמן עצמאית מעל אזור הטקסט (הוסר הפילטר המהיר) */}
                                                                                                   <Group gap="sm" mb="sm" align="flex-end" dir="ltr" wrap="nowrap">
                                                                                                       <Select 
                                                                                                           label="Lookback Time"
-                                                                                                          size="xs"
+                                                                                                          size="sm"
                                                                                                           data={['1m', '5m', '15m', '30m', '1h', '3h', '12h', '24h', '7d', '14d']}
                                                                                                           value={currentEditedTime}
                                                                                                           onChange={(val) => {
                                                                                                               setEditingTimeRanges(prev => ({...prev, [rid]: val}));
                                                                                                           }}
-                                                                                                          style={{ width: '130px' }}
+                                                                                                          style={{ width: '150px' }}
                                                                                                           styles={{ input: { fontWeight: 700, color: '#228be6' } }}
                                                                                                       />
                                                                                                   </Group>
 
                                                                                                   <Textarea 
-                                                                                                      size="sm"
-                                                                                                      styles={{ input: { direction: 'ltr', fontFamily: 'monospace', fontSize: '13px', backgroundColor: '#1a1b26', color: '#a9b1d6', border: '1px solid #2f334d', padding: '12px' } }}
+                                                                                                      size="md"
+                                                                                                      styles={{ input: { direction: 'ltr', fontFamily: 'monospace', fontSize: '14px', backgroundColor: '#1a1b26', color: '#a9b1d6', border: '1px solid #2f334d', padding: '16px' } }}
                                                                                                       value={currentEditedQuery}
                                                                                                       onChange={(e) => {
                                                                                                           const val = e.currentTarget.value; 
                                                                                                           setEditingQueries(prev => ({...prev, [rid]: val}));
                                                                                                       }}
                                                                                                       minRows={4}
-                                                                                                      maxRows={10}
+                                                                                                      maxRows={12}
                                                                                                       autosize
                                                                                                   />
                                                                                                   
                                                                                                   <Group justify="flex-end" mt="md">
                                                                                                       <Button 
-                                                                                                          size="sm" 
+                                                                                                          size="md" 
                                                                                                           color="teal" 
                                                                                                           radius="md"
-                                                                                                          leftSection={<IconDeviceFloppy size={16} />}
+                                                                                                          leftSection={<IconDeviceFloppy size={18} />}
                                                                                                           disabled={currentEditedQuery === r.query && currentEditedTime === r.timeRange}
                                                                                                           onClick={async () => {
                                                                                                               try {
@@ -3429,8 +3452,8 @@ const handleCreateAutomation = async () => {
                                                                                               </Tabs.Panel>
 
                                                                                               <Tabs.Panel value="qsl" pt="xs">
-                                                                                                  <Text size="xs" c="dimmed" mb="xs" ta="center">מבנה ה-JSON כפי שיישלח ב-API לאלסטיק (כולל פילטר הזמן)</Text>
-                                                                                                  <Code block color="dark.8" c="teal.3" style={{ backgroundColor: '#1a1b26', direction: 'ltr', textAlign: 'left', fontSize: '12px', maxHeight: '220px', overflowY: 'auto', whiteSpace: 'pre-wrap', padding: '12px', border: '1px solid #2f334d' }}>
+                                                                                                  <Text size="xs" c="dimmed" mb="xs">מבנה ה-JSON המלא שיישלח לאלסטיק כולל הפילטרים:</Text>
+                                                                                                  <Code block color="dark.8" c="teal.3" style={{ backgroundColor: '#1a1b26', direction: 'ltr', textAlign: 'left', fontSize: '13px', maxHeight: '250px', overflowY: 'auto', whiteSpace: 'pre-wrap', padding: '16px', border: '1px solid #2f334d', borderRadius: '6px' }}>
                                                                                                       {JSON.stringify({
                                                                                                           query: {
                                                                                                               bool: {
@@ -3448,211 +3471,216 @@ const handleCreateAutomation = async () => {
                                                                                               </Tabs.Panel>
                                                                                           </Tabs>
                                                                                       </Paper>
-                                                                                  </Collapse>
-                                                                              </Card>
-                                                                          );
-                                                                      })}
-                                                                  </SimpleGrid>
+                                                                                  </Box>
+                                                                              )}
+                                                                          </Paper>
+                                                                      );
+                                                                  })
                                                               )}
-                                                          </Stack>
+                                                          </Group>
+
+                                                          <Divider my="md" />
 
                                                           {/* טופס יצירת שליפה מקצועי כולל מנגנון מיפוי רכיב יעד */}
                                                           {!showNewQueryForm ? (
-                                                              <Button mt="md" variant="light" color="blue" leftSection={<IconPlus size={16} />} onClick={() => setShowNewQueryForm(true)}>
-                                                                  הוסף שליפת לוגים חדשה (חוק ניטור)
+                                                              <Button variant="light" size="lg" color="blue" leftSection={<IconPlus size={20} />} onClick={() => setShowNewQueryForm(true)} style={{ alignSelf: 'flex-start' }}>
+                                                                  הוסף חוק אלסטיק חדש לאינדקס
                                                               </Button>
                                                           ) : (
-                                                          <Paper withBorder p="lg" radius="md" bg="white" style={{ borderTop: '4px solid #20c997', boxShadow: '0 4px 12px rgba(0,0,0,0.02)', position: 'relative' }}>
-                                                              <ActionIcon color="gray" variant="subtle" style={{ position: 'absolute', top: 10, left: 10 }} onClick={() => setShowNewQueryForm(false)}>
-                                                                  <IconX size={16} />
-                                                              </ActionIcon>
-                                                              <Text fw={900} size="sm" c="teal.9" mb="md">הגדרת שליפת לוגים חדשה (KQL) ורכיב יעד במערכת</Text>
-                                                              
-                                                              <Grid align="flex-end" spacing="md">
-                                                                  <Grid.Col span={{ base: 12, sm: 8 }}>
-                                                                      <Textarea 
-                                                                          label="שאילתת לוגים (Discover KQL Syntax)" 
-                                                                          placeholder='למשל: level: "ERROR" AND application_name: "auth-server"'
-                                                                          value={elasticForm.query}
-                                                                          onChange={(e) => setElasticForm({...elasticForm, query: e.currentTarget.value})}
-                                                                          dir="ltr"
-                                                                          minRows={2}
-                                                                          styles={{ input: { fontFamily: 'monospace', fontSize: '13px' } }}
-                                                                          required
-                                                                      />
-                                                                  </Grid.Col>
-                                                                  <Grid.Col span={{ base: 12, sm: 4 }}>
-                                                                      <TextInput 
-                                                                          label="טווח זמן חופשי ועצמאי (Lookback)" 
-                                                                          placeholder="למשל: 30s, 15m, 1h, 14d"
-                                                                          value={elasticForm.timeRange}
-                                                                          onChange={(e) => setElasticForm({...elasticForm, timeRange: e.currentTarget.value})}
-                                                                          required
-                                                                          dir="ltr"
-                                                                      />
-                                                                  </Grid.Col>
+                                                              <Paper withBorder p="xl" radius="md" bg="white" style={{ borderTop: '4px solid #20c997', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', position: 'relative' }}>
+                                                                  <ActionIcon color="gray" variant="subtle" size="lg" style={{ position: 'absolute', top: 15, left: 15 }} onClick={() => setShowNewQueryForm(false)}>
+                                                                      <IconX size={20} />
+                                                                  </ActionIcon>
+                                                                  <Group mb="xl" gap="sm">
+                                                                      <IconDatabase color="#20c997" size={24} />
+                                                                      <Text fw={900} size="lg" c="teal.9">הגדרת חוק התראה חדש (KQL)</Text>
+                                                                  </Group>
+                                                                  
+                                                                  <Grid align="flex-end" gutter="md">
+                                                                      <Grid.Col span={{ base: 12, md: 9 }}>
+                                                                          <Textarea 
+                                                                              label={<Text fw={700} size="sm">שאילתת KQL (Discover Syntax)</Text>}
+                                                                              placeholder='למשל: level: "ERROR" AND application_name: "auth-server"'
+                                                                              value={elasticForm.query}
+                                                                              onChange={(e) => setElasticForm({...elasticForm, query: e.currentTarget.value})}
+                                                                              dir="ltr"
+                                                                              minRows={3}
+                                                                              styles={{ input: { fontFamily: 'monospace', fontSize: '14px', backgroundColor: '#f8f9fa' } }}
+                                                                              required
+                                                                          />
+                                                                      </Grid.Col>
+                                                                      <Grid.Col span={{ base: 12, md: 3 }}>
+                                                                          <TextInput 
+                                                                              label={<Text fw={700} size="sm">Lookback (זמן אחורה)</Text>}
+                                                                              placeholder="למשל: 15m, 1h, 14d"
+                                                                              value={elasticForm.timeRange}
+                                                                              onChange={(e) => setElasticForm({...elasticForm, timeRange: e.currentTarget.value})}
+                                                                              required
+                                                                              dir="ltr"
+                                                                              size="md"
+                                                                          />
+                                                                      </Grid.Col>
 
-                                                                  {/* רכיב מיפוי רכיב יעד (מסתנכרן ישירות מול ה-CPR) */}
-                                                                  <Grid.Col span={12}>
-                                                                      <Paper withBorder p="sm" bg="gray.0" radius="sm">
-                                                                          <Text fw={800} size="xs" mb="xs">מיפוי רכיב יעד (לסריקה וצימוד ויזואלי בסורק הארכיטקטורה):</Text>
-                                                                          <Radio.Group 
-                                                                              value={elasticForm.mappingType} 
-                                                                              onChange={(val) => setElasticForm({...elasticForm, mappingType: val})}
-                                                                          >
-                                                                              <Group gap="xl">
-                                                                                  <Radio value="node" label="בחר רכיב מהמאגר (או הקלד חדש)" />
-                                                                                  <Radio value="template" label="שיוך דינמי (Template)" />
-                                                                              </Group>
-                                                                          </Radio.Group>
+                                                                      <Grid.Col span={12} mt="sm">
+                                                                          <Paper withBorder p="md" bg="gray.0" radius="md">
+                                                                              <Text fw={800} size="sm" mb="md">מיפוי רכיב יעד (מסתנכרן ישירות מול שרטוטי המערכת - CPR):</Text>
+                                                                              <Radio.Group 
+                                                                                  value={elasticForm.mappingType} 
+                                                                                  onChange={(val) => setElasticForm({...elasticForm, mappingType: val})}
+                                                                              >
+                                                                                  <Group gap="xl">
+                                                                                      <Radio value="node" label={<Text fw={600}>בחירת רכיב ספציפי</Text>} />
+                                                                                      <Radio value="template" label={<Text fw={600}>שיוך דינמי (Template)</Text>} />
+                                                                                  </Group>
+                                                                              </Radio.Group>
 
-                                                                          {elasticForm.mappingType === 'node' ? (
-                                                                              <Select 
-                                                                                  mt="xs"
-                                                                                  placeholder="חפש רכיב במאגר (CPR) או הקלד רכיב חדש..."
-                                                                                  data={elasticNodeOptions}
-                                                                                  value={elasticForm.node}
-                                                                                  onChange={(val) => {
-                                                                                      setElasticForm({...elasticForm, node: val});
-                                                                                      if (val && !elasticNodeOptions.some(o => o.value === val)) {
-                                                                                          setElasticNodeOptions(prev => [...prev, { value: val, label: val }]);
+                                                                              {elasticForm.mappingType === 'node' ? (
+                                                                                  <Select 
+                                                                                      mt="md"
+                                                                                      size="md"
+                                                                                      placeholder="חפש רכיב במאגר או הקלד רכיב חדש..."
+                                                                                      data={elasticNodeOptions}
+                                                                                      value={elasticForm.node}
+                                                                                      onChange={(val) => {
+                                                                                          setElasticForm({...elasticForm, node: val});
+                                                                                          if (val && !elasticNodeOptions.some(o => o.value === val)) {
+                                                                                              setElasticNodeOptions(prev => [...prev, { value: val, label: val }]);
+                                                                                          }
+                                                                                      }}
+                                                                                      searchable
+                                                                                      clearable
+                                                                                      required={elasticForm.mappingType === 'node'}
+                                                                                      styles={{ input: { direction: 'ltr', textAlign: 'right' } }}
+                                                                                  />
+                                                                              ) : (
+                                                                                  <TextInput 
+                                                                                      mt="md"
+                                                                                      size="md"
+                                                                                      placeholder="למשל: {{$labels.application_name}}"
+                                                                                      value={elasticForm.mappingTemplate}
+                                                                                      onChange={(e) => setElasticForm({...elasticForm, mappingTemplate: e.currentTarget.value})}
+                                                                                      required={elasticForm.mappingType === 'template'}
+                                                                                      dir="ltr"
+                                                                                  />
+                                                                              )}
+                                                                          </Paper>
+                                                                      </Grid.Col>
+
+                                                                      <Grid.Col span={{ base: 12, sm: 4 }}>
+                                                                          <TextInput 
+                                                                              label={<Text fw={700} size="sm">שם באנגלית (מזהה)</Text>}
+                                                                              placeholder="e.g. sys_errors"
+                                                                              value={elasticForm.ruleName || ''}
+                                                                              onChange={(e) => setElasticForm({...elasticForm, ruleName: e.currentTarget.value.replace(/[^a-zA-Z0-9_]/g, '')})}
+                                                                              size="md"
+                                                                              required
+                                                                          />
+                                                                      </Grid.Col>
+                                                                      <Grid.Col span={{ base: 12, sm: 5 }}>
+                                                                          <TextInput 
+                                                                              label={<Text fw={700} size="sm">מטרת החוק ותיאור</Text>}
+                                                                              placeholder="הזן תיאור ברור..."
+                                                                              value={elasticForm.reason}
+                                                                              onChange={(e) => setElasticForm({...elasticForm, reason: e.currentTarget.value})}
+                                                                              size="md"
+                                                                              required
+                                                                          />
+                                                                      </Grid.Col>
+                                                                      <Grid.Col span={{ base: 12, sm: 3 }}>
+                                                                          <TextInput 
+                                                                              label={<Text fw={700} size="sm">מקת"ג (אופציונלי)</Text>}
+                                                                              placeholder="למשל: 123456"
+                                                                              value={elasticForm.maktag}
+                                                                              onChange={(e) => setElasticForm({...elasticForm, maktag: e.currentTarget.value})}
+                                                                              size="md"
+                                                                          />
+                                                                      </Grid.Col>
+                                                                      
+                                                                      <Grid.Col span={12} mt="md">
+                                                                          <Group justify="flex-end" gap="md">
+                                                                              <Button 
+                                                                                  color="orange" 
+                                                                                  variant="light" 
+                                                                                  size="md"
+                                                                                  disabled={!elasticForm.query}
+                                                                                  loading={isQueryTesting}
+                                                                                  onClick={async () => {
+                                                                                      setIsQueryTesting(true);
+                                                                                      setQueryTestResult(null);
+                                                                                      try {
+                                                                                          const res = await axios.post(`${API_BASE_URL}/api/elastic-count`, {
+                                                                                              env: selectedEnvForMgmt,
+                                                                                              index: indexName,
+                                                                                              query: elasticForm.query,
+                                                                                              timeRange: elasticForm.timeRange || '15m'
+                                                                                          });
+                                                                                          setQueryTestResult(res.data);
+                                                                                      } catch(e) {
+                                                                                          alert('שגיאה בבדיקת השאילתה מול שרת האלסטיק');
+                                                                                      }
+                                                                                      setIsQueryTesting(false);
+                                                                                  }}
+                                                                              >
+                                                                                  בדוק שליפה בלייב
+                                                                              </Button>
+
+                                                                              <Button 
+                                                                                  color="teal"
+                                                                                  size="md"
+                                                                                  disabled={!elasticForm.ruleName || !elasticForm.query || !elasticForm.reason || !queryTestResult || (elasticForm.mappingType === 'node' && !elasticForm.node) || (elasticForm.mappingType === 'template' && !elasticForm.mappingTemplate)}
+                                                                                  onClick={async () => {
+                                                                                      const payload = {
+                                                                                          name: elasticForm.ruleName,
+                                                                                          purposeRule: elasticForm.reason,
+                                                                                          maktag: elasticForm.maktag,
+                                                                                          query: elasticForm.query,
+                                                                                          tech: 'elastic_log',
+                                                                                          tsdb: 'elastic',
+                                                                                          team: 'אפליקטיבי',
+                                                                                          application: selectedEnvForMgmt,
+                                                                                          node: elasticForm.mappingType === 'node' ? elasticForm.node : 'GENERIC',
+                                                                                          mappingTemplate: elasticForm.mappingType === 'template' ? elasticForm.mappingTemplate : '',
+                                                                                          elasticEnv: selectedEnvForMgmt,
+                                                                                          indexName: indexName,
+                                                                                          timeRange: elasticForm.timeRange || '15m',
+                                                                                          user: username,
+                                                                                          reason: elasticForm.reason
+                                                                                      };
+
+                                                                                      try {
+                                                                                          await axios.post(`${API_BASE_URL}/rules`, payload);
+                                                                                          alert('השליפה נוספה ואומתה בהצלחה!');
+                                                                                          fetchRules();
+                                                                                          setElasticForm({ ruleName: '', query: '', timeRange: '15m', reason: '', maktag: '', mappingType: 'node', node: '', mappingTemplate: '' });
+                                                                                          setQueryTestResult(null);
+                                                                                          setShowNewQueryForm(false);
+                                                                                      } catch(e) {
+                                                                                          alert('שגיאה בשמירת השליחה במערכת');
                                                                                       }
                                                                                   }}
-                                                                                  searchable
-                                                                                  clearable
-                                                                                  required={elasticForm.mappingType === 'node'}
-                                                                                  styles={{ input: { direction: 'ltr', textAlign: 'right' } }}
-                                                                              />
-                                                                          ) : (
-                                                                              <TextInput 
-                                                                                  mt="xs"
-                                                                                  placeholder="למשל: {{$labels.application_name}}"
-                                                                                  value={elasticForm.mappingTemplate}
-                                                                                  onChange={(e) => setElasticForm({...elasticForm, mappingTemplate: e.currentTarget.value})}
-                                                                                  required={elasticForm.mappingType === 'template'}
-                                                                                  dir="ltr"
-                                                                              />
-                                                                          )}
-                                                                      </Paper>
-                                                                  </Grid.Col>
+                                                                              >
+                                                                                  שמור חוק ניטור
+                                                                              </Button>
+                                                                          </Group>
+                                                                      </Grid.Col>
 
-                                                                  <Grid.Col span={{ base: 12, sm: 3 }}>
-                                                                      <TextInput 
-                                                                          label="שם באנגלית (חובה)" 
-                                                                          placeholder="e.g. sys_errors"
-                                                                          value={elasticForm.ruleName || ''}
-                                                                          onChange={(e) => setElasticForm({...elasticForm, ruleName: e.currentTarget.value.replace(/[^a-zA-Z0-9_]/g, '')})}
-                                                                          required
-                                                                      />
-                                                                  </Grid.Col>
-                                                                  <Grid.Col span={{ base: 12, sm: 3 }}>
-                                                                      <TextInput 
-                                                                          label="מטרת השליפה (חובה)" 
-                                                                          placeholder="תיאור הניטור..."
-                                                                          value={elasticForm.reason}
-                                                                          onChange={(e) => setElasticForm({...elasticForm, reason: e.currentTarget.value})}
-                                                                          required
-                                                                      />
-                                                                  </Grid.Col>
-                                                                  <Grid.Col span={{ base: 12, sm: 3 }}>
-                                                                      <TextInput 
-                                                                          label='מקת"ג (אופציונלי)' 
-                                                                          placeholder='למשל: 123456'
-                                                                          value={elasticForm.maktag}
-                                                                          onChange={(e) => setElasticForm({...elasticForm, maktag: e.currentTarget.value})}
-                                                                      />
-                                                                  </Grid.Col>
-                                                                  <Grid.Col span={{ base: 12, sm: 3 }}>
-                                                                      <Select 
-                                                                          label="זמן אחורה (Lookback)"
-                                                                          data={['1m', '5m', '15m', '30m', '1h', '3h', '12h', '24h', '7d', '14d']}
-                                                                          value={elasticForm.timeRange || '15m'}
-                                                                          onChange={(val) => setElasticForm({...elasticForm, timeRange: val})}
-                                                                      />
-                                                                  </Grid.Col>
-                                                                  
-                                                                  <Grid.Col span={12}>
-                                                                      <Group justify="flex-end" gap="sm">
-                                                                          <Button 
-                                                                              color="orange" 
-                                                                              variant="light" 
-                                                                              disabled={!elasticForm.query}
-                                                                              loading={isQueryTesting}
-                                                                              onClick={async () => {
-                                                                                  setIsQueryTesting(true);
-                                                                                  setQueryTestResult(null);
-                                                                                  try {
-                                                                                      const res = await axios.post(`${API_BASE_URL}/api/elastic-count`, {
-                                                                                          env: selectedEnvForMgmt,
-                                                                                          index: indexName,
-                                                                                          query: elasticForm.query,
-                                                                                          timeRange: elasticForm.timeRange || '15m'
-                                                                                      });
-                                                                                      setQueryTestResult(res.data);
-                                                                                  } catch(e) {
-                                                                                      alert('שגיאה בבדיקת השאילתה מול שרת האלסטיק');
-                                                                                  }
-                                                                                  setIsQueryTesting(false);
-                                                                              }}
-                                                                          >
-                                                                              בדוק שליפה בלייב
-                                                                          </Button>
-
-                                                                          <Button 
-                                                                              color="teal" 
-                                                                              disabled={!elasticForm.ruleName || !elasticForm.query || !elasticForm.reason || !queryTestResult || (elasticForm.mappingType === 'node' && !elasticForm.node) || (elasticForm.mappingType === 'template' && !elasticForm.mappingTemplate)}
-                                                                              onClick={async () => {
-                                                                                  const payload = {
-                                                                                      name: elasticForm.ruleName,
-                                                                                      purposeRule: elasticForm.reason,
-                                                                                      maktag: elasticForm.maktag,
-                                                                                      query: elasticForm.query,
-                                                                                      tech: 'elastic_log',
-                                                                                      tsdb: 'elastic',
-                                                                                      team: 'אפליקטיבי',
-                                                                                      application: selectedEnvForMgmt,
-                                                                                      node: elasticForm.mappingType === 'node' ? elasticForm.node : 'GENERIC',
-                                                                                      mappingTemplate: elasticForm.mappingType === 'template' ? elasticForm.mappingTemplate : '',
-                                                                                      elasticEnv: selectedEnvForMgmt,
-                                                                                      indexName: indexName,
-                                                                                      timeRange: elasticForm.timeRange || '15m',
-                                                                                      user: username,
-                                                                                      reason: elasticForm.reason
-                                                                                  };
-
-                                                                                  try {
-                                                                                      await axios.post(`${API_BASE_URL}/rules`, payload);
-                                                                                      alert('השליפה נוספה ואומתה בהצלחה!');
-                                                                                      fetchRules();
-                                                                                      // איפוס הטופס לאחר הצלחה
-                                                                                      setElasticForm({ ruleName: '', query: '', timeRange: '15m', reason: '', maktag: '', mappingType: 'node', node: '', mappingTemplate: '' });
-                                                                                      setQueryTestResult(null);
-                                                                                      setShowNewQueryForm(false);
-                                                                                  } catch(e) {
-                                                                                      alert('שגיאה בשמירת השליחה במערכת');
-                                                                                  }
-                                                                              }}
-                                                                          >
-                                                                              שמור שליפה
-                                                                          </Button>
-                                                                      </Group>
-                                                                  </Grid.Col>
-
-                                                                  {queryTestResult && (
-                                                                      <Grid.Col span={12}>
-                                                                          <Alert color={queryTestResult.status === 'success' ? 'blue' : 'red'} title="תוצאות בדיקת הרצה בזמן אמת">
-                                                                              <Text fw={700} size="sm">{queryTestResult.message}</Text>
-                                                                              {queryTestResult.count !== undefined && (
-                                            <Text size="xs" mt={2} fw={800}>כמות שורות לוג (Hits) שנמצאו בטווח הזמן: <b>{queryTestResult.count} שורות.</b></Text>
-                                        )}
-                                    </Alert>
-                                </Grid.Col>
-                            )}
-                        </Grid>
-                    </Paper>
-                )} {/* <--- התווים שצריך להוסיף כאן */}
-                </Stack>
-            </Tabs.Panel>
+                                                                      {queryTestResult && (
+                                                                          <Grid.Col span={12}>
+                                                                              <Alert color={queryTestResult.status === 'success' ? 'blue' : 'red'} title="תוצאות בדיקת הרצה בזמן אמת">
+                                                                                  <Text fw={700} size="md">{queryTestResult.message}</Text>
+                                                                                  {queryTestResult.count !== undefined && (
+                                                                                      <Text size="sm" mt={4} fw={800}>
+                                                                                          כמות שורות לוג (Hits) שנמצאו בטווח הזמן: <b>{queryTestResult.count} שורות.</b>
+                                                                                      </Text>
+                                                                                  )}
+                                                                              </Alert>
+                                                                          </Grid.Col>
+                                                                      )}
+                                                                  </Grid>
+                                                              </Paper>
+                                                          )}
+                                                      </Stack>
+                                                  </Tabs.Panel>
                                               );
                                           })}
                                       </Tabs>
@@ -4349,68 +4377,6 @@ const handleCreateAutomation = async () => {
                     <Checkbox size="md" label="יומן העברת משמרת" checked={visibleTabs.shifts} onChange={(e) => setVisibleTabs({...visibleTabs, shifts: e.currentTarget.checked})} />
                 </Group>
             </Paper>
-
-            {/* מתקין הספריות שהוספנו */}
-            <Card withBorder radius="md" p="md" shadow="sm" mb="lg">
-                <Group mb="xs">
-                    <ThemeIcon size="lg" radius="md" variant="light" color="indigo">
-                        <IconTerminal2 size={20} />
-                    </ThemeIcon>
-                    <Text fw={700} size="lg">מתקין ספריות Python (PIP Installer)</Text>
-                </Group>
-                
-                <Text size="sm" c="dimmed" mb="md">
-                    התקן ספריות פייתון חסרות ישירות על השרת המארח. ההתקנה תתבצע בסביבה שבה שרת ה-API רץ כעת.
-                </Text>
-
-                <Group align="flex-end" dir="ltr" mb="sm">
-                    <TextInput 
-                        label="Library Name" 
-                        placeholder="e.g., pandas, requests, beautifulsoup4" 
-                        style={{ flexGrow: 1 }}
-                        value={installLibName}
-                        onChange={(e) => setInstallLibName(e.currentTarget.value)}
-                        disabled={isInstallingLib}
-                    />
-                    <Button 
-                        color="indigo" 
-                        loading={isInstallingLib}
-                        disabled={!installLibName.trim()}
-                        onClick={async () => {
-                            setIsInstallingLib(true);
-                            setInstallLogs('מתחיל התקנה, אנא המתן...\n(פעולה זו עשויה לקחת מספר שניות/דקות תלוי בגודל הספרייה)');
-                            try {
-                                const res = await axios.post(`${API_BASE_URL}/api/system/install-library`, {
-                                    library_name: installLibName
-                                });
-                                
-                                if (res.data.status === 'success') {
-                                    setInstallLogs(`✅ התקנה הושלמה בהצלחה!\n\n${res.data.output}`);
-                                    setInstallLibName(''); // ניקוי השדה
-                                } else {
-                                    setInstallLogs(`❌ שגיאה בהתקנה:\n\n${res.data.output}`);
-                                }
-                            } catch (error) {
-                                setInstallLogs(`❌ שגיאת תקשורת:\n\n${error.response?.data?.detail || error.message}`);
-                            }
-                            setIsInstallingLib(false);
-                        }}
-                    >
-                        התקן ספרייה (pip install)
-                    </Button>
-                </Group>
-
-                {/* חלון טרמינל וירטואלי להצגת הלוגים של ההתקנה */}
-                <Collapse in={!!installLogs}>
-                    <Paper withBorder p="xs" radius="sm" bg="#1a1b26" mt="sm">
-                        <Text size="xs" fw={700} c="gray.5" mb={4}>Terminal Output:</Text>
-                        <Code block color="dark.8" c="green.4" style={{ backgroundColor: 'transparent', direction: 'ltr', textAlign: 'left', fontSize: '12px', maxHeight: '200px', overflowY: 'auto', whiteSpace: 'pre-wrap' }}>
-                            {installLogs}
-                        </Code>
-                    </Paper>
-                </Collapse>
-            </Card>
-
             <Paper shadow="xl" p="xl" radius="md" withBorder dir="rtl">
               <Group justify="space-between" mb="lg">
                 <Title order={2}>הגדרות מתקדמות (ניהול דינמי MongoDB)</Title>
@@ -4550,6 +4516,36 @@ const handleCreateAutomation = async () => {
                   </Paper>
                 </Grid.Col>
 
+                {/* מודול התקנת ספריות פייתון */}
+                <Grid.Col span={12}>
+                    <Paper withBorder p="md" bg="gray.0" shadow="sm">
+                        <Text fw={800} mb="sm">התקנת ספריות פייתון (PIP Install)</Text>
+                        <Text size="xs" c="dimmed" mb="md">
+                            התקן ספריות פייתון בשרת כדי שיהיו זמינות לשימוש בקודים של האקספורטר, הקיימות והאוטומציות.
+                        </Text>
+                        <Group align="flex-end">
+                            <TextInput 
+                                label="שם הספרייה (למשל: requests, pandas)" 
+                                placeholder="package-name..." 
+                                value={newPackage} 
+                                onChange={(e) => setNewPackage(e.currentTarget.value)}
+                                style={{ flexGrow: 1 }}
+                                dir="ltr"
+                            />
+                            <Button color="blue" onClick={handleInstallPackage} loading={isInstalling} disabled={!newPackage} leftSection={<IconCode size={16} />}>
+                                התקן ספרייה בשרת
+                            </Button>
+                        </Group>
+                        {installLog && (
+                            <Paper bg="dark.8" p="sm" mt="md" radius="sm">
+                                <Text c={installLog.includes('error') || installLog.includes('שגיאה') ? 'red.4' : 'green.4'} style={{ fontFamily: 'monospace', direction: 'ltr', whiteSpace: 'pre-wrap', maxHeight: '200px', overflowY: 'auto', fontSize: '13px' }}>
+                                    {installLog}
+                                </Text>
+                            </Paper>
+                        )}
+                    </Paper>
+                </Grid.Col>
+
                 <Grid.Col span={12}>
                   <Paper withBorder p="md" bg="gray.0">
                     <Text fw={700} mb="sm">ניהול צוותים במערכת</Text>
@@ -4642,14 +4638,14 @@ const handleCreateAutomation = async () => {
                {(styles) => (
                   <Paper style={{ ...styles, backgroundColor: 'rgba(255,255,255,0.95)', border: '1px solid #dee2e6' }} p="xs" radius="lg" shadow="xl">
                      <Group gap="xs">
-                        <Tooltip label="הורדת סוכן Windows" position="top" withArrow>
-                           <ActionIcon size="xl" radius="md" variant="light" color="blue" onClick={() => window.open(`${API_BASE_URL}/api/download/windows`, '_blank')}>
-                             <IconServer size={24} />
+                        <Tooltip label="הורדת מונגו (MongoDB)" position="top" withArrow>
+                           <ActionIcon size="xl" radius="md" variant="light" color="teal" onClick={() => window.open(`${API_BASE_URL}/api/download/mongo`, '_blank')}>
+                             <IconDatabase size={24} />
                            </ActionIcon>
                         </Tooltip>
-                        <Tooltip label="הורדת סוכן Linux" position="top" withArrow>
-                           <ActionIcon size="xl" radius="md" variant="light" color="orange" onClick={() => window.open(`${API_BASE_URL}/api/download/linux`, '_blank')}>
-                             <IconAppWindow size={24} />
+                        <Tooltip label="הורדת S3" position="top" withArrow>
+                           <ActionIcon size="xl" radius="md" variant="light" color="orange" onClick={() => window.open(`${API_BASE_URL}/api/download/s3`, '_blank')}>
+                             <IconServer size={24} />
                            </ActionIcon>
                         </Tooltip>
                      </Group>

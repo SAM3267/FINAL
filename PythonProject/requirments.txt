@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+pydantic
+motor
+pymongo
+httpx
+requests
+pytesseract
+rapidocr_onnxruntime
+Pillow

@@ -618,6 +618,7 @@ class Rule(BaseModel):
     name: str
     query: Optional[str] = ""
     maktag: Optional[str] = ""
+    impact: Optional[str] = ""
     team: Optional[str] = ""
     purposeRule: Optional[str] = ""
     tsdb: Optional[str] = "pulse_thanos"
@@ -873,8 +874,9 @@ async def get_shifts_by_soldier_or_date(date: Optional[str] = None):
 @app.post("/rules")
 async def create_new_rule(rule: Rule):
     d = rule.model_dump()
-    d.pop("user", None)
+    user = d.pop("user", "Unknown")
     d.pop("history", None)
+    reason = d.pop("reason", "יצירת חוק חדש")
 
     if not d.get("tech") or d.get("tech") == "CUSTOM":
         if "elastic" in str(d.get("tsdb", "")).lower():
@@ -882,9 +884,26 @@ async def create_new_rule(rule: Rule):
         else:
             d["tech"] = "CUSTOM"
 
+    now_str = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    snapshot = {k: v for k, v in d.items()}
+    history_entry = {
+        "user": user,
+        "date": now_str,
+        "version": 1,
+        "query": d.get("queryMajor") or d.get("queryCritical") or d.get("query", ""),
+        "node": d.get("node", ""),
+        "tech": d.get("tech", ""),
+        "reason": reason,
+        "rule_snapshot": snapshot
+    }
+    d["history"] = [history_entry]
+
     if d.get("name"):
         existing = await rules_collection.find_one({"name": d["name"]})
         if existing:
+            last_version = existing.get("history", [{"version": 0}])[-1]["version"] if existing.get("history") else 0
+            history_entry["version"] = last_version + 1
+
             update_fields = {
                 "queryMajor": d.get("queryMajor", ""),
                 "queryCritical": d.get("queryCritical", ""),
@@ -895,9 +914,17 @@ async def create_new_rule(rule: Rule):
                 "team": d.get("team", ""),
                 "majorThreshold": d.get("majorThreshold"),
                 "criticalThreshold": d.get("criticalThreshold"),
-                "thresholdDirection": d.get("thresholdDirection", ">")
+                "thresholdDirection": d.get("thresholdDirection", ">"),
+                "indexName": d.get("indexName", ""),
+                "elasticEnv": d.get("elasticEnv", ""),
+                "timeRange": d.get("timeRange", "15m"),
+                "maktag": d.get("maktag", ""),
+                "impact": d.get("impact", "")
             }
-            await rules_collection.update_one({"_id": existing["_id"]}, {"$set": update_fields})
+            await rules_collection.update_one(
+                {"_id": existing["_id"]},
+                {"$set": update_fields, "$push": {"history": history_entry}}
+            )
             existing["id"] = str(existing.pop("_id"))
             return existing
 
@@ -930,12 +957,21 @@ class PromQLCheckRequest(BaseModel):
     query: str
     node: Optional[str] = ""
     mappingTemplate: Optional[str] = ""
+    tsdb: Optional[str] = "pulse_thanos"
 
 
 @app.post("/check_promql")
 async def check_promql(request: PromQLCheckRequest):
-    config_doc = await database.get_collection("settings").find_one({"key": "monitoring_urls"})
-    prometheus_url = config_doc["prometheus_url"] if config_doc and "prometheus_url" in config_doc else "http://localhost:9090"
+    tsdb_lower = str(request.tsdb).lower() if request.tsdb else "pulse_thanos"
+
+    if tsdb_lower == "pulse":
+        prometheus_url = os.getenv("PULSE_PROM_URL", "http://pulse-prometheus:9090")
+    elif tsdb_lower == "unity":
+        prometheus_url = os.getenv("UNITY_VICTORIA_URL", "http://unity-victoria:8428")
+    else:
+        config_doc = await database.get_collection("settings").find_one({"key": "monitoring_urls"})
+        prometheus_url = config_doc[
+            "prometheus_url"] if config_doc and "prometheus_url" in config_doc else "http://localhost:9090"
 
     comps = await components_col.find({}).to_list(length=None)
     valid_nodes = set([str(c["name"]).lower() for c in comps])

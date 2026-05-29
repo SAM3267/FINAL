@@ -104,7 +104,12 @@ export function AddRuleModal({ opened, onClose, onAdd, editingRule }) {
     setIsTestingPrometheus(true);
     setTestResults(null);
     
-    const prometheusUrl = tsdb === 'pulse_thanos' ? 'http://localhost:9090' : 'http://URL_Y:9090'; 
+    let prometheusUrl = 'http://localhost:9090'; // ברירת מחדל ל-pulse_thanos
+    if (tsdb === 'pulse') {
+        prometheusUrl = 'http://pulse-prometheus:9090'; // כתובת שרת פרומתיאוס של פולס
+    } else if (tsdb === 'unity') {
+        prometheusUrl = 'http://unity-victoria:8428'; // כתובת שרת ויקטוריה מטריקס של יוניטי
+    } 
     
     try {
       const splitRegex = /\s+\b(?:and|or|unless)\b\s+/i;
@@ -237,8 +242,9 @@ export function AddRuleModal({ opened, onClose, onAdd, editingRule }) {
                 <Select 
                     label="מקור נתונים (TSDB)" 
                     data={[
-                        { value: 'pulse_thanos', label: 'pulse_thanos' },
-                        { value: 'unity', label: 'unity' }
+                        { value: 'pulse_thanos', label: 'Pulse Thanos' },
+                        { value: 'pulse', label: 'Pulse (Prometheus)' },
+                        { value: 'unity', label: 'Unity (VictoriaMetrics)' }
                     ]}
                     value={tsdb} 
                     onChange={setTsdb} 
